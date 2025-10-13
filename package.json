@@ -1,0 +1,26 @@
+{
+  "name": "test-serviceability",
+  "version": "1.0.0",
+  "license": "UNLICENSED",
+  "scripts": {
+    "shopify": "shopify",
+    "build": "shopify app build",
+    "dev": "shopify app dev",
+    "dev:web": "cd web && npm run dev",
+    "info": "shopify app info",
+    "generate": "shopify app generate",
+    "deploy": "shopify app deploy"
+  },
+  "trustedDependencies": [
+    "@shopify/plugin-cloudflare"
+  ],
+  "author": "anshul.bhardwaj",
+  "private": true,
+  "workspaces": [
+    "extensions/*",
+    "web"
+  ],
+  "devDependencies": {
+    "ngrok": "^5.0.0-beta.2"
+  }
+}

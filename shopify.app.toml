@@ -1,0 +1,25 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "0ffad3c0c8ac1561b99d0311955ee5c9"
+name = "test-serviceability"
+application_url = "https://example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[webhooks]
+api_version = "2025-10"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_products" # A base scope is needed, read_products is a safe default
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[access.protected_customer_data]
+read_shipping = true
+
+[auth]
+redirect_urls = [ ]
