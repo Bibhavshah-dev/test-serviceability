@@ -1,12 +1,28 @@
 import express from 'express';
 import cors from 'cors';
+import dotenv from 'dotenv';
+import { verifyHMACMiddleware, signResponse } from './hmac-utils.js';
+
+// Load environment variables
+dotenv.config();
 
 const PORT = process.env.PORT || 3000;
+const HMAC_SECRET = process.env.HMAC_SECRET;
+
+if (!HMAC_SECRET) {
+  console.error('❌ ERROR: HMAC_SECRET not found in environment variables!');
+  console.error('Please create a .env file with HMAC_SECRET defined.');
+  process.exit(1);
+}
+
 const app = express();
 
 // Enable CORS and JSON parsing
 app.use(cors());
 app.use(express.json());
+
+// Apply HMAC verification middleware to protected routes
+app.use('/api/check-serviceability', verifyHMACMiddleware(HMAC_SECRET));
 
 // Health check endpoint
 app.get('/', (req, res) => {
@@ -32,22 +48,27 @@ app.get('/api/external-data', async (req, res) => {
     
     console.log('External API data received:', data);
     
-    // Return the data with additional metadata
-    res.json({
+    // Return the data with additional metadata and HMAC signature
+    const responseData = {
       success: true,
       source: 'JSONPlaceholder API',
       endpoint: 'https://jsonplaceholder.typicode.com/users/1',
       timestamp: new Date().toISOString(),
       data: data
-    });
+    };
+    
+    const signedResponse = signResponse(responseData, HMAC_SECRET);
+    res.json(signedResponse);
     
   } catch (error) {
     console.error('Error calling external API:', error);
-    res.status(500).json({
+    const errorData = {
       success: false,
       error: error.message,
       timestamp: new Date().toISOString()
-    });
+    };
+    const signedResponse = signResponse(errorData, HMAC_SECRET);
+    res.status(500).json(signedResponse);
   }
 });
 
@@ -69,22 +90,27 @@ app.get('/api/external-posts', async (req, res) => {
     
     console.log(`Fetched ${posts.length} posts from external API`);
     
-    res.json({
+    const responseData = {
       success: true,
       source: 'JSONPlaceholder API',
       endpoint: `https://jsonplaceholder.typicode.com/posts?_limit=${limit}`,
       timestamp: new Date().toISOString(),
       count: posts.length,
       data: posts
-    });
+    };
+    
+    const signedResponse = signResponse(responseData, HMAC_SECRET);
+    res.json(signedResponse);
     
   } catch (error) {
     console.error('Error calling external API:', error);
-    res.status(500).json({
+    const errorData = {
       success: false,
       error: error.message,
       timestamp: new Date().toISOString()
-    });
+    };
+    const signedResponse = signResponse(errorData, HMAC_SECRET);
+    res.status(500).json(signedResponse);
   }
 });
 
@@ -128,7 +154,7 @@ app.post('/api/check-serviceability', async (req, res) => {
     
     console.log(`Result: ${isServiceable ? '✅ SERVICEABLE' : '❌ NOT SERVICEABLE'}`);
     
-    res.json({
+    const responseData = {
       serviceable: isServiceable,
       message: isServiceable 
         ? 'Delivery available to this location' 
@@ -136,25 +162,31 @@ app.post('/api/check-serviceability', async (req, res) => {
       postalCode,
       city,
       timestamp: new Date().toISOString()
-    });
+    };
+    
+    const signedResponse = signResponse(responseData, HMAC_SECRET);
+    res.json(signedResponse);
     
   } catch (error) {
     console.error('Error checking serviceability:', error);
-    res.status(500).json({
+    const errorData = {
       serviceable: false,
       error: error.message,
       timestamp: new Date().toISOString()
-    });
+    };
+    const signedResponse = signResponse(errorData, HMAC_SECRET);
+    res.status(500).json(signedResponse);
   }
 });
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log(`\n🔐 HMAC Authentication: ENABLED`);
   console.log(`\nAvailable endpoints:`);
-  console.log(`  - GET  http://localhost:${PORT}/api/external-data`);
-  console.log(`  - GET  http://localhost:${PORT}/api/external-posts?limit=5`);
-  console.log(`  - POST http://localhost:${PORT}/api/check-serviceability`);
-  console.log(`\n✅ Ready to check serviceability from Shopify checkout!\n`);
+  console.log(`  - GET  http://localhost:${PORT}/api/external-data (HMAC signed response)`);
+  console.log(`  - GET  http://localhost:${PORT}/api/external-posts?limit=5 (HMAC signed response)`);
+  console.log(`  - POST http://localhost:${PORT}/api/check-serviceability (HMAC required + signed response)`);
+  console.log(`\n✅ Ready to check serviceability from Shopify checkout with HMAC security!\n`);
 });
 
 

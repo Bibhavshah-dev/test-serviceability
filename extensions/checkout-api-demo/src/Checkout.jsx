@@ -6,6 +6,7 @@ import {
   Text,
   useShippingAddress,
 } from '@shopify/ui-extensions-react/checkout';
+import { fetchWithHMAC } from './hmac-utils';
 
 export default reactExtension(
   'purchase.checkout.block.render',
@@ -23,14 +24,12 @@ function Extension() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const response = await fetch('https://dc82d3dd94ac.ngrok-free.app/api/external-data');
-        if (!response.ok) {
-          throw new Error(`API responded with status: ${response.status}`);
-        }
-        const data = await response.json();
+        // Using fetchWithHMAC for secure communication with HMAC verification
+        const data = await fetchWithHMAC('https://8a5889026df0.ngrok-free.app/api/external-data');
         setApiData(data);
       } catch (err) {
         setError(err.message);
+        console.error('🔒 HMAC Error:', err);
       } finally {
         setLoading(false);
       }
@@ -71,7 +70,7 @@ function Extension() {
       
       {apiData && (
         <BlockStack spacing="tight">
-          <Banner title="API Response!" status="success">
+          <Banner title="🔒 Secure API Response (HMAC Verified)" status="success">
             <Text size="small" appearance="subdued">
               {JSON.stringify(apiData, null, 2)}
             </Text>
