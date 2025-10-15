@@ -8,6 +8,8 @@ handle = "checkout-api-demo"
 
 [extensions.capabilities]
 network_access = true
+read_shipping = true
+read_products = true
 
 [[extensions.targeting]]
 module = "./src/Checkout.jsx"

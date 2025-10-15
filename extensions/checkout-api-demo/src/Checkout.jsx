@@ -4,6 +4,7 @@ import {
   Banner,
   BlockStack,
   Text,
+  useShippingAddress,
 } from '@shopify/ui-extensions-react/checkout';
 
 export default reactExtension(
@@ -15,6 +16,9 @@ function Extension() {
   const [apiData, setApiData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Get shipping address from Shopify checkout
+  const shippingAddress = useShippingAddress();
 
   useEffect(() => {
     async function fetchData() {
@@ -34,6 +38,23 @@ function Extension() {
     
     fetchData();
   }, []);
+
+  // Log shipping details whenever they change
+  useEffect(() => {
+    if (shippingAddress) {
+      console.log('=================================');
+      console.log('Shipping Address Details:');
+      console.log('=================================');
+      console.log('Full Address:', shippingAddress);
+      console.log('Postal Code:', shippingAddress.zip);
+      console.log('City:', shippingAddress.city);
+      console.log('Address Line 1:', shippingAddress.address1);
+      console.log('Address Line 2:', shippingAddress.address2);
+      console.log('Province/State:', shippingAddress.provinceCode);
+      console.log('Country:', shippingAddress.countryCode);
+      console.log('=================================');
+    }
+  }, [shippingAddress]);
 
   return (
     <BlockStack spacing="loose">
