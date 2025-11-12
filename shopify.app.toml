@@ -7,19 +7,20 @@ embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 [webhooks]
 api_version = "2025-10"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products" # A base scope is needed, read_products is a safe default
+scopes = "read_products"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
-[access.protected_customer_data]
-read_shipping = true
-
 [auth]
 redirect_urls = [ ]
+
+[app_proxy]
+url = "https://ad09f4988f88.ngrok-free.app/proxy"
+subpath = "serviceability"
+prefix = "apps"

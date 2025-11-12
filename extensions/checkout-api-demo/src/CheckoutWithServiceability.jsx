@@ -6,8 +6,10 @@ import {
   Text,
   useShippingAddress,
   Button,
+  useApi,
+  useCartLines,
 } from '@shopify/ui-extensions-react/checkout';
-import { fetchWithHMAC } from './hmac-utils';
+// Using App Proxy from checkout; no session tokens here
 
 export default reactExtension(
   'purchase.checkout.block.render',
@@ -19,24 +21,27 @@ function Extension() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // Get shipping address, shop info, and cart lines from Shopify checkout
+  const shippingAddress = useShippingAddress();
+  const { shop } = useApi();
+  const cartLines = useCartLines();
+
   // Serviceability state
   const [serviceabilityResult, setServiceabilityResult] = useState(null);
   const [checkingServiceability, setCheckingServiceability] = useState(false);
   const [serviceabilityError, setServiceabilityError] = useState(null);
-  
-  // Get shipping address from Shopify checkout
-  const shippingAddress = useShippingAddress();
 
-  // Example: Fetch API data with HMAC verification
+  // Fetch API data via direct ngrok endpoint (dev mode - unauthenticated)
   useEffect(() => {
     async function fetchData() {
       try {
-        // Using fetchWithHMAC for secure communication with HMAC verification
-        const data = await fetchWithHMAC('https://8a5889026df0.ngrok-free.app/api/external-data');
+        const response = await fetch('https://ad09f4988f88.ngrok-free.app/dev/external-data');
+        if (!response.ok) throw new Error(`API responded with status: ${response.status}`);
+        const data = await response.json();
         setApiData(data);
       } catch (err) {
         setError(err.message);
-        console.error('🔒 HMAC Error:', err);
+        console.error('⚠️ Dev Mode Error:', err);
       } finally {
         setLoading(false);
       }
@@ -69,7 +74,7 @@ function Extension() {
     }
   }, [shippingAddress?.zip, shippingAddress?.city]);
 
-  // Function to check serviceability with HMAC authentication
+  // Function to check serviceability via direct ngrok endpoint (dev mode)
   async function checkServiceability() {
     if (!shippingAddress) {
       setServiceabilityError('No shipping address available');
@@ -81,25 +86,27 @@ function Extension() {
     setServiceabilityResult(null);
 
     try {
-      console.log('🔍 Checking serviceability with HMAC authentication...');
+      console.log('🔍 Checking serviceability via direct endpoint...');
       
-      // Make POST request with HMAC signing and verification
-      const result = await fetchWithHMAC(
-        'https://8a5889026df0.ngrok-free.app/api/check-serviceability',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            postalCode: shippingAddress.zip,
-            city: shippingAddress.city,
-            address1: shippingAddress.address1,
-            address2: shippingAddress.address2,
-            province: shippingAddress.provinceCode,
-            country: shippingAddress.countryCode
-          })
-        }
-      );
+      const response = await fetch('https://ad09f4988f88.ngrok-free.app/dev/check-serviceability', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          postalCode: shippingAddress.zip,
+          city: shippingAddress.city,
+          address1: shippingAddress.address1,
+          address2: shippingAddress.address2,
+          province: shippingAddress.provinceCode,
+          country: shippingAddress.countryCode,
+          shop: shop.myshopifyDomain
+        })
+      });
+      if (!response.ok) throw new Error(`API responded with status: ${response.status}`);
+      const result = await response.json();
 
-      console.log('✅ Serviceability result (HMAC verified):', result);
+      console.log('✅ Serviceability result (Direct endpoint - dev mode):', result);
       setServiceabilityResult(result);
     } catch (err) {
       console.error('❌ Serviceability check failed:', err);
@@ -111,6 +118,61 @@ function Extension() {
 
   return (
     <BlockStack spacing="loose">
+      {/* SKU Details Section */}
+      {cartLines && cartLines.length > 0 && (
+        <BlockStack spacing="tight">
+          <Text size="medium" emphasis="bold">
+            📦 Cart Items (SKU Details)
+          </Text>
+          {cartLines.map((line, index) => (
+            <Banner key={line.id || index} status="info">
+              <BlockStack spacing="tight">
+                <Text size="small" emphasis="bold">
+                  {line.merchandise?.product?.title || 'Product'}
+                </Text>
+                {line.merchandise?.sku && (
+                  <Text size="small">SKU: {line.merchandise.sku}</Text>
+                )}
+                <Text size="small">Quantity: {line.quantity}</Text>
+                {line.merchandise?.title && line.merchandise.title !== line.merchandise?.product?.title && (
+                  <Text size="small" appearance="subdued">
+                    Variant: {line.merchandise.title}
+                  </Text>
+                )}
+                {line.merchandise?.product?.vendor && (
+                  <Text size="small" appearance="subdued">
+                    Vendor: {line.merchandise.product.vendor}
+                  </Text>
+                )}
+              </BlockStack>
+            </Banner>
+          ))}
+        </BlockStack>
+      )}
+
+      {/* Shipping Address Display */}
+      {shippingAddress && (
+        <BlockStack spacing="tight">
+          <Text size="medium" emphasis="bold">
+            📍 Shipping Address
+          </Text>
+          <Banner status="info">
+            <BlockStack spacing="tight">
+              {shippingAddress.address1 && (
+                <Text size="small">{shippingAddress.address1}</Text>
+              )}
+              {shippingAddress.address2 && (
+                <Text size="small">{shippingAddress.address2}</Text>
+              )}
+              <Text size="small">
+                {shippingAddress.city}, {shippingAddress.provinceCode} {shippingAddress.zip}
+              </Text>
+              <Text size="small">{shippingAddress.countryCode}</Text>
+            </BlockStack>
+          </Banner>
+        </BlockStack>
+      )}
+
       {/* Serviceability Check Section */}
       {shippingAddress && (
         <BlockStack spacing="tight">
@@ -141,7 +203,7 @@ function Extension() {
                   Location: {serviceabilityResult.city} - {serviceabilityResult.postalCode}
                 </Text>
                 <Text size="small" appearance="subdued">
-                  🔒 Verified with HMAC authentication
+                  ⚠️ Dev Mode - Direct Endpoint (No Auth)
                 </Text>
               </BlockStack>
             </Banner>
@@ -172,7 +234,7 @@ function Extension() {
       
       {apiData && (
         <BlockStack spacing="tight">
-          <Banner title="🔒 Secure API Response (HMAC Verified)" status="success">
+          <Banner title="⚠️ DEV MODE: API Response (Direct Endpoint - No Auth)" status="warning">
             <Text size="small" appearance="subdued">
               {JSON.stringify(apiData, null, 2)}
             </Text>

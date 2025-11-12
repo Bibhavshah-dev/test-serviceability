@@ -5,8 +5,9 @@ import {
   BlockStack,
   Text,
   useShippingAddress,
+  useApi,
 } from '@shopify/ui-extensions-react/checkout';
-import { fetchWithHMAC } from './hmac-utils';
+// Using App Proxy from checkout; no session tokens here
 
 export default reactExtension(
   'purchase.checkout.block.render',
@@ -18,18 +19,25 @@ function Extension() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Get shipping address from Shopify checkout
+  // Get shipping address and shop info from Shopify checkout
   const shippingAddress = useShippingAddress();
+  const { shop } = useApi();
 
   useEffect(() => {
     async function fetchData() {
       try {
-        // Using fetchWithHMAC for secure communication with HMAC verification
-        const data = await fetchWithHMAC('https://8a5889026df0.ngrok-free.app/api/external-data');
+        // TEMPORARY: Dev endpoint (bypassing password-protected App Proxy)
+        // TODO: Switch back to App Proxy once password is removed:
+        // const response = await fetch(`https://${shop.myshopifyDomain}/apps/serviceability/external-data`);
+        const response = await fetch('https://ad09f4988f88.ngrok-free.app/dev/external-data');
+        if (!response.ok) {
+          throw new Error(`API responded with status: ${response.status}`);
+        }
+        const data = await response.json();
         setApiData(data);
       } catch (err) {
         setError(err.message);
-        console.error('🔒 HMAC Error:', err);
+        console.error('⚠️ Dev Mode Error:', err);
       } finally {
         setLoading(false);
       }
@@ -70,7 +78,7 @@ function Extension() {
       
       {apiData && (
         <BlockStack spacing="tight">
-          <Banner title="🔒 Secure API Response (HMAC Verified)" status="success">
+          <Banner title="⚠️ DEV MODE: API Response (No Auth - Testing Only)" status="warning">
             <Text size="small" appearance="subdued">
               {JSON.stringify(apiData, null, 2)}
             </Text>

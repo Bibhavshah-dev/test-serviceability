@@ -1,4 +1,4 @@
-api_version = "2024-10"
+api_version = "2025-01"
 
 [[extensions]]
 uid = "2417e01d-2144-b7f8-7466-0fea647170d893f038bf"
@@ -10,7 +10,15 @@ handle = "checkout-api-demo"
 network_access = true
 read_shipping = true
 read_products = true
+api_access = true
+write_cart_metafields = true
 
 [[extensions.targeting]]
-module = "./src/Checkout.jsx"
+module = "./src/CheckoutWithServiceability.jsx"
 target = "purchase.checkout.block.render"
+
+# Define metafields that this extension can write
+[[extensions.metafields]]
+namespace = "custom"
+key = "serviceability_data"
+type = "json"
