@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import crypto from 'crypto';=
+import crypto from 'crypto';
 
 // Load environment variables
 dotenv.config();

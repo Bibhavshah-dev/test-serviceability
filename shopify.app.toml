@@ -2,7 +2,7 @@
 
 client_id = "0ffad3c0c8ac1561b99d0311955ee5c9"
 name = "test-serviceability"
-application_url = "https://example.com"
+application_url = "https://test-serviceability.onrender.com/"
 embedded = true
 
 [build]
@@ -11,9 +11,13 @@ automatically_update_urls_on_dev = true
 [webhooks]
 api_version = "2025-10"
 
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "https://test-serviceability.onrender.com/webhooks"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products"
+scopes = "read_products,read_shipping"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
@@ -21,6 +25,6 @@ use_legacy_install_flow = false
 redirect_urls = [ ]
 
 [app_proxy]
-url = "https://ad09f4988f88.ngrok-free.app/proxy"
+url = "https://test-serviceability.onrender.com/proxy"
 subpath = "serviceability"
 prefix = "apps"
