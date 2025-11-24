@@ -204,13 +204,11 @@ app.post('/dev/check-serviceability', async (req, res) => {
 
     const accessToken = await loginToWMS();
     console.log("accessToken", accessToken);
+    const addressString = `${address1 ? address1 : ''}${address2 ? ', ' + address2 : ''}, ${city}, ${province || ''} ${postalCode}`;
+    console.log("addressString", addressString);
     const requestBody = {
-      postalCode: postalCode,
-      city: city,
-      address1: address1,
-      address2: address2,
-      province: province,
-      country: country
+      loc_type: "address",
+      consignee_address: addressString
     };
 
 
@@ -227,9 +225,12 @@ app.post('/dev/check-serviceability', async (req, res) => {
       },
       body: JSON.stringify(requestBody)
     });
+    const isServiceableData = await isServiceable.json();
+    console.log("<<<<<<isServiceableData>>>>>>", isServiceableData);
+    // console.log("<<<<<<isServiceable>>>>>>", isServiceable);
 
     const result = {
-      serviceable: isServiceable,
+      serviceable: isServiceableData.success,
       message: isServiceable
         ? 'Delivery available to this location'
         : 'Delivery not available to this location',
@@ -237,7 +238,7 @@ app.post('/dev/check-serviceability', async (req, res) => {
       city,
       shop: shop || 'unknown',
       timestamp: new Date().toISOString(),
-      warning: '⚠️ DEV MODE - No authentication!'
+      // warning: '⚠️ DEV MODE - No authentication!'
     };
 
     console.log('📦 Serviceability Result:', result);
