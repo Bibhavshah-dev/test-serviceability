@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "node index.js",
+    "build": "npm install && npm run dev",
     "start": "node index.js"
   },
   "dependencies": {
@@ -13,5 +14,3 @@
     "dotenv": "^16.0.3"
   }
 }
-
-
