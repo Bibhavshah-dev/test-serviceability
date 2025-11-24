@@ -6,7 +6,7 @@ import crypto from 'crypto';
 // Load environment variables
 dotenv.config();
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET;
 const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY;
 
@@ -17,6 +17,42 @@ if (!SHOPIFY_API_SECRET || !SHOPIFY_API_KEY) {
 }
 
 const app = express();
+app.use('/webhooks', express.raw({ type: '*/*' }));
+
+function verifyShopifyWebhook(secret) {
+  return (req, res, next) => {
+    try {
+      const hmacHeader = req.get("X-Shopify-Hmac-Sha256");
+      if (!hmacHeader) {
+        console.error("Missing HMAC header");
+        return res.status(401).send("Unauthorized");
+      }
+
+      const rawBody = req.body;
+      const generatedHash = crypto
+        .createHmac("sha256", secret)
+        .update(rawBody, "utf8")
+        .digest("base64");
+
+      const isValid = crypto.timingSafeEqual(
+        Buffer.from(generatedHash),
+        Buffer.from(hmacHeader)
+      );
+
+      if (!isValid) {
+        console.error("Webhook HMAC validation failed");
+        return res.status(401).send("Unauthorized");
+      }
+
+      req.body = JSON.parse(rawBody.toString("utf8"));
+      next();
+
+    } catch (error) {
+      console.error("Error verifying webhook:", error);
+      res.status(400).send("Invalid Webhook");
+    }
+  };
+}
 
 // Enhanced CORS for Shopify App Proxy through ngrok tunnel
 app.use(cors({
@@ -35,7 +71,7 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
+
   // Handle preflight OPTIONS requests
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);
@@ -74,16 +110,16 @@ app.use('/proxy', (req, res, next) => {
   console.log('  Referer:', req.get('referer') || 'none');
   console.log('  User-Agent:', req.get('user-agent') || 'none');
   console.log('====================================\n');
-  
+
   if (!verifyAppProxy(req)) {
     console.warn('❌ App Proxy signature verification FAILED');
     console.warn('   Signature received:', req.query?.signature);
     console.warn('   Shop param:', req.query?.shop);
     console.warn('   Timestamp:', req.query?.timestamp);
-    
+
     // Return detailed error for debugging
-    return res.status(401).json({ 
-      success: false, 
+    return res.status(401).json({
+      success: false,
       error: 'Invalid app proxy signature',
       debug: {
         receivedShop: req.query?.shop,
@@ -93,11 +129,20 @@ app.use('/proxy', (req, res, next) => {
       }
     });
   }
-  
+
   req.shopDomain = req.query?.shop;
   console.log(`✅ App Proxy signature VERIFIED for shop: ${req.shopDomain}\n`);
   next();
 });
+
+app.post(
+  "/webhooks",
+  verifyShopifyWebhook(process.env.SHOPIFY_API_SECRET),
+  (req, res) => {
+    console.log("Verified webhook:", req.body);
+    res.status(200).send("OK");
+  }
+);
 
 // Health check endpoint
 app.get('/', (req, res) => {
@@ -112,15 +157,15 @@ app.get('/', (req, res) => {
 app.get('/dev/external-data', async (req, res) => {
   try {
     console.log('⚠️ DEV ENDPOINT CALLED (no auth) - REMOVE IN PRODUCTION!');
-    
+
     const response = await fetch('https://jsonplaceholder.typicode.com/users/1');
-    
+
     if (!response.ok) {
       throw new Error(`External API responded with status: ${response.status}`);
     }
-    
+
     const data = await response.json();
-    
+
     res.json({
       success: true,
       source: 'JSONPlaceholder API',
@@ -129,7 +174,7 @@ app.get('/dev/external-data', async (req, res) => {
       warning: '⚠️ DEV MODE - No authentication!',
       data: data
     });
-    
+
   } catch (error) {
     console.error('Error calling external API:', error);
     res.status(500).json({
@@ -145,7 +190,6 @@ app.get('/dev/external-data', async (req, res) => {
 app.post('/dev/check-serviceability', async (req, res) => {
   try {
     const { postalCode, city, address1, address2, province, country, shop } = req.body;
-    
     console.log('\n====================================');
     console.log('🧪 DEV SERVICEABILITY CHECK (NO AUTH)');
     console.log('====================================');
@@ -157,11 +201,33 @@ app.post('/dev/check-serviceability', async (req, res) => {
     console.log('Province:', province);
     console.log('Country:', country);
     console.log('====================================\n');
-    
-    // Mock serviceability logic - replace with actual API call
-    const serviceablePincodes = ['110001', '110002', '400001', '560001', '92998', '92998-3874'];
-    const isServiceable = serviceablePincodes.some(pin => postalCode?.includes(pin));
-    
+
+    const accessToken = await loginToWMS();
+    console.log("accessToken", accessToken);
+    const requestBody = {
+      postalCode: postalCode,
+      city: city,
+      address1: address1,
+      address2: address2,
+      province: province,
+      country: country
+    };
+
+
+    // // Mock serviceability logic - replace with actual API call
+    // const serviceablePincodes = ['110001', '110002', '400001', '560001', '92998', '92998-3874'];
+    // const isServiceable = serviceablePincodes.some(pin => postalCode?.includes(pin));
+
+    const isServiceable = await fetch(`https://dev-api-wms.delhivery.com/wms-dev/platform/serviceability/AUTOCLIENT`, {
+      method: 'POST',
+      headers: {
+        'fc-uuid': 'daaf0742ee084d13886eaaf7e0a19dee',
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
     const result = {
       serviceable: isServiceable,
       message: isServiceable
@@ -173,12 +239,12 @@ app.post('/dev/check-serviceability', async (req, res) => {
       timestamp: new Date().toISOString(),
       warning: '⚠️ DEV MODE - No authentication!'
     };
-    
+
     console.log('📦 Serviceability Result:', result);
     console.log('✅ Sending response to extension...\n');
-    
+
     res.json(result);
-    
+
   } catch (error) {
     console.error('❌ Error checking serviceability:', error);
     res.status(500).json({
@@ -189,22 +255,45 @@ app.post('/dev/check-serviceability', async (req, res) => {
   }
 });
 
+async function loginToWMS() {
+  const username = "autouser";
+  const password = "Delhivery@12345";
+  try {
+
+    const response = await fetch(`https://dev-api-wms.delhivery.com/wms-dev/auth/user/authenticate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password })
+    })
+    if (!response.ok) {
+      throw new Error(`API request failed with status: ${response.status}`);
+    }
+    const data = await response.json();
+    return data.data.access_token;
+  } catch (error) {
+    console.error('Login to WMS failed:', error);
+    throw error;
+  }
+}
+
 // Endpoint to call external public API (via App Proxy)
 app.get('/proxy/external-data', async (req, res) => {
   try {
     console.log('Fetching data from external API...');
-    
+
     // Using JSONPlaceholder - a free fake REST API for testing
     const response = await fetch('https://jsonplaceholder.typicode.com/users/1');
-    
+
     if (!response.ok) {
       throw new Error(`External API responded with status: ${response.status}`);
     }
-    
+
     const data = await response.json();
-    
+
     console.log('External API data received:', data);
-    
+
     // Return the data with additional metadata
     const responseData = {
       success: true,
@@ -215,7 +304,7 @@ app.get('/proxy/external-data', async (req, res) => {
       shop: req.shopDomain
     };
     res.json(responseData);
-    
+
   } catch (error) {
     console.error('Error calling external API:', error);
     const errorData = {
@@ -231,20 +320,20 @@ app.get('/proxy/external-data', async (req, res) => {
 app.get('/proxy/external-posts', async (req, res) => {
   try {
     console.log('Fetching posts from external API...');
-    
+
     // Get query parameter for limit (default to 5)
     const limit = req.query.limit || 5;
-    
+
     const response = await fetch(`https://jsonplaceholder.typicode.com/posts?_limit=${limit}`);
-    
+
     if (!response.ok) {
       throw new Error(`External API responded with status: ${response.status}`);
     }
-    
+
     const posts = await response.json();
-    
+
     console.log(`Fetched ${posts.length} posts from external API`);
-    
+
     const responseData = {
       success: true,
       source: 'JSONPlaceholder API',
@@ -255,7 +344,7 @@ app.get('/proxy/external-posts', async (req, res) => {
       shop: req.shopDomain
     };
     res.json(responseData);
-    
+
   } catch (error) {
     console.error('Error calling external API:', error);
     const errorData = {
@@ -274,7 +363,7 @@ app.get('/proxy/external-posts', async (req, res) => {
 app.get('/proxy/check-serviceability', async (req, res) => {
   try {
     const { postalCode, city, address1, address2, province, country } = req.query;
-    
+
     console.log('=================================');
     console.log('Checking serviceability (GET):');
     console.log({
@@ -286,19 +375,19 @@ app.get('/proxy/check-serviceability', async (req, res) => {
       country
     });
     console.log('=================================');
-    
+
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     // DEMO LOGIC: Allow all except postal codes starting with "999"
     const isServiceable = !postalCode?.startsWith('999');
-    
+
     console.log(`Result: ${isServiceable ? '✅ SERVICEABLE' : '❌ NOT SERVICEABLE'}`);
-    
+
     const responseData = {
       serviceable: isServiceable,
-      message: isServiceable 
-        ? 'Delivery available to this location' 
+      message: isServiceable
+        ? 'Delivery available to this location'
         : 'Delivery not available to this location',
       postalCode,
       city,
@@ -306,7 +395,7 @@ app.get('/proxy/check-serviceability', async (req, res) => {
       shop: req.shopDomain
     };
     res.json(responseData);
-    
+
   } catch (error) {
     console.error('Error checking serviceability:', error);
     const errorData = {
@@ -322,7 +411,7 @@ app.get('/proxy/check-serviceability', async (req, res) => {
 app.post('/proxy/check-serviceability', async (req, res) => {
   try {
     const { postalCode, city, address1, address2, province, country } = req.body;
-    
+
     console.log('=================================');
     console.log('Checking serviceability for:');
     console.log({
@@ -334,16 +423,16 @@ app.post('/proxy/check-serviceability', async (req, res) => {
       country
     });
     console.log('=================================');
-    
+
     // FOR NOW: Simple logic - you'll replace this with actual API call
     // Example: Block specific postal codes, or call your logistics API
-    
+
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     // DEMO LOGIC: Allow all except postal codes starting with "999"
     const isServiceable = !postalCode?.startsWith('999');
-    
+
     // TODO: Replace with actual external API call
     // const response = await fetch('https://your-logistics-api.com/check', {
     //   method: 'POST',
@@ -355,13 +444,13 @@ app.post('/proxy/check-serviceability', async (req, res) => {
     // });
     // const result = await response.json();
     // const isServiceable = result.serviceable;
-    
+
     console.log(`Result: ${isServiceable ? '✅ SERVICEABLE' : '❌ NOT SERVICEABLE'}`);
-    
+
     const responseData = {
       serviceable: isServiceable,
-      message: isServiceable 
-        ? 'Delivery available to this location' 
+      message: isServiceable
+        ? 'Delivery available to this location'
         : 'Delivery not available to this location',
       postalCode,
       city,
@@ -369,7 +458,7 @@ app.post('/proxy/check-serviceability', async (req, res) => {
       shop: req.shopDomain
     };
     res.json(responseData);
-    
+
   } catch (error) {
     console.error('Error checking serviceability:', error);
     const errorData = {
@@ -388,20 +477,20 @@ app.listen(PORT, () => {
   console.log(`Port: ${PORT}`);
   console.log(`URL: http://localhost:${PORT}`);
   console.log('====================================\n');
-  
+
   console.log('🔐 PRODUCTION ENDPOINTS (App Proxy - Authenticated):');
   console.log('   Call via: https://<shop>.myshopify.com/apps/serviceability/...');
   console.log(`   • GET  /proxy/external-data`);
   console.log(`   • GET  /proxy/external-posts?limit=5`);
   console.log(`   • POST /proxy/check-serviceability`);
   console.log('   ✅ Requires valid Shopify signature\n');
-  
+
   console.log('⚠️  DEV ENDPOINTS (Direct - No Auth):');
   console.log('   Call directly for testing:');
   console.log(`   • GET  http://localhost:${PORT}/dev/external-data`);
   console.log(`   • POST http://localhost:${PORT}/dev/check-serviceability`);
   console.log('   ❌ NO AUTHENTICATION - Remove before production!\n');
-  
+
   console.log('📋 Status: Ready to receive requests');
   console.log('====================================\n');
 });
