@@ -231,7 +231,7 @@ app.post('/dev/check-serviceability', async (req, res) => {
 
     const result = {
       serviceable: isServiceableData.success,
-      message: isServiceable
+      message: isServiceableData.success
         ? 'Delivery available to this location'
         : 'Delivery not available to this location',
       postalCode,
